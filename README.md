@@ -42,6 +42,13 @@ docker compose exec postgresql psql -U postgres -d myapp \
 
 `pgroonga` は trusted でないので postgres（スーパーユーザー）で作る。`vector` は DB の所有者でも作れる。
 
+既定では PUBLIC（全ロール）がどのデータベースにも CONNECT と TEMPORARY を持つので、足したデータベースも取り上げておく
+（持ち主は持ち主なので繋げる。postgres と template1 は初回の initdb で取り上げ済み）。
+
+```sh
+docker compose exec postgresql psql -U postgres -c "REVOKE CONNECT, TEMPORARY ON DATABASE myapp FROM PUBLIC;"
+```
+
 ## 設定
 
 - メモリは共有の1台として控えめ（`compose.yml` の `command`）：shared_buffers 256MB、
