@@ -1,0 +1,57 @@
+# 箱に1台の共有 PostgreSQL（PostgreSQL 18 + PGroonga + pgvector）。
+# ほかの compose プロジェクトは external network `postgresql` に参加して、ホスト名 `postgresql` の 5432 番に繋ぐ。
+# ホスト側からは 127.0.0.1:5432 だけ（外には開けない）。
+name: postgresql
+
+services:
+  postgresql:
+    build: .
+    image: postgresql-docker:18-pgroonga4.1.0-pgvector0.8.7
+    container_name: postgresql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env に POSTGRES_PASSWORD を書く}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      # initdb.d/10-hindsight.sh が初回だけ読む
+      HINDSIGHT_DB_USER: ${HINDSIGHT_DB_USER:-hindsight}
+      HINDSIGHT_DB_NAME: ${HINDSIGHT_DB_NAME:-hindsight}
+      HINDSIGHT_DB_PASSWORD: ${HINDSIGHT_DB_PASSWORD:?.env に HINDSIGHT_DB_PASSWORD を書く}
+    # 共有の1台として控えめなメモリ設定（箱は RAM 12GB、ほかのコンテナと同居）
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - log_min_duration_statement=1000
+    shm_size: 256m
+    volumes:
+      # PostgreSQL 18 の公式イメージは PGDATA を /var/lib/postgresql/18/docker に置き、
+      # VOLUME は /var/lib/postgresql（メジャーアップグレードで並べられるように）
+      - pgdata:/var/lib/postgresql
+      - ./initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+networks:
+  default:
+    # 固定名。ほかのプロジェクトから `external: true` で参照する
+    name: postgresql
+
+volumes:
+  pgdata:
